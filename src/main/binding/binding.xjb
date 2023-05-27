@@ -1,0 +1,27 @@
+<jxb:bindings version="2.0"
+              xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+              xmlns:xjc="http://java.sun.com/xml/ns/jaxb/xjc"
+              xmlns:s="http://www.w3.org/2001/XMLSchema">
+
+    <jxb:globalBindings
+            fixedAttributeAsConstantProperty="true"
+            typesafeEnumMemberName="generateName"
+            typesafeEnumMaxMembers="1000"
+            enableFailFastCheck="true"
+            generateIsSetMethod="false">
+
+        <!--   <jxb:javaType name="java.time.LocalDateTime" xmlType="s:date"
+                         parseMethod="com.ots.platform_core.schema.tais.adapter.DateTimeAdapter.unmarshalDate"
+                         printMethod="com.ots.platform_core.schema.tais.adapter.DateTimeAdapter.marshalDate"/>
+           <jxb:javaType name="java.time.LocalDateTime" xmlType="s:dateTime"
+                         parseMethod="com.ots.platform_core.schema.tais.adapter.DateTimeAdapter.unmarshal"
+                         printMethod="com.ots.platform_core.schema.tais.adapter.DateTimeAdapter.marshal"/>-->
+
+        <xjc:simple/>
+
+    </jxb:globalBindings>
+
+    <jxb:bindings schemaLocation="../resources/xsd/cbrf.xsd">
+    </jxb:bindings>
+
+</jxb:bindings>

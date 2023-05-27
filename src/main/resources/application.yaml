@@ -1,0 +1,37 @@
+bot.name : CurrencyRateGlebBot
+bot.token : 5424860559:AAFHN5Z41x8eoTD88qPHtJNaerwTPCD_tXA
+feign:
+    compression:
+        request:
+            enabled: false
+        response:
+            enabled: false
+    client:
+        config:
+            cbrf:
+                loggerLevel: FULL
+                url: https://www.cbr-xml-daily.ru/daily_json.js
+httpclient:
+    enabled: true
+    max-connections: 1000
+    max-connections-per-route: 1000
+    time-to-live: 900
+    time-to-live-unit: SECONDS
+spring:
+    datasource:
+        driver-class-name: org.h2.Driver
+        url: jdbc:h2:mem:mydatabase;MODE=PostgreSQL
+        username: sa
+        password:
+    jpa:
+        show-sql: true
+        properties:
+            hibernate:
+                dialect: org.hibernate.dialect.H2Dialect
+    h2:
+        console:
+            enabled: true
+            settings:
+                web-allow-others: false
+
+
