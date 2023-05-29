@@ -10,7 +10,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.karaban.currency_rate_bot.client.CurrencyRatesClient;
-import ru.karaban.currency_rate_bot.dto.CurrencyDto;
 import ru.karaban.currency_rate_bot.dto.UserDto;
 import ru.karaban.currency_rate_bot.entity.Currency;
 import ru.karaban.currency_rate_bot.entity.CurrencyRate;
@@ -23,6 +22,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -87,11 +87,13 @@ public class CurrencyRateService {
         currencyRateRepository.saveAll(currencyRates);
     }
 
-    public CurrencyRate getDifferentCurrencyRate(CurrencyDto target, CurrencyDto source) {
-       return currencyRateRepository.findById(target.getCode() + "_" + source.getCode()).orElseThrow();
+    public BigDecimal getDifferentCurrencyRate(String target, String source) {
+       Currency targetCurrency = currencyRepository.findByCode(target).orElseThrow();
+       Currency sourceCurrency = currencyRepository.findByCode(source).orElseThrow();
+       return currencyRateRepository.findById(targetCurrency.getIsoCode() + "_" + sourceCurrency.getIsoCode()).orElseThrow().getRate();
     }
 
-    public Page<Currency> getCurrencyRateToRub(UserDto userDto, int pageNumber) {
+    public Page<Currency> getAllCurrencyRateToRub(UserDto userDto, int pageNumber) {
         List<Options> optionsList = optionsService.findOptionByUser(userDto);
         if (optionsList.isEmpty()) {
             return currencyRepository.findAll(PageRequest.of(pageNumber, 5));
@@ -101,6 +103,11 @@ public class CurrencyRateService {
                     .map(options -> options.getCurrency().getIsoCode())
                     .collect(Collectors.toList())), secondPageWithFiveElements);
         }
+    }
+
+    public BigDecimal getRateToRub(String code) {
+        Currency currency = currencyRepository.findByCode(code).orElseThrow();
+        return currency.getRateToRUB();
     }
 
     private BigDecimal calculateRate(Currency target, Currency source) {

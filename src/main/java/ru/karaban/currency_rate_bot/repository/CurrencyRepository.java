@@ -7,9 +7,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import ru.karaban.currency_rate_bot.entity.Currency;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CurrencyRepository extends JpaRepository<Currency, Long> {
 
     Page<Currency> findAllByIsoCodeIn(List<Long> longs, Pageable page);
 
+    Optional<Currency> findByCode(String code);
 }
