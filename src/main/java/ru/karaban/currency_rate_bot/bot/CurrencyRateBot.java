@@ -40,7 +40,8 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
     private final BotConfig config;
     private final UserService userService;
     private final CurrencyRateService currencyRateService;
-
+    private int pageNumber = 0;
+    private Message message;
 
     @Override
     public String getBotUsername() {
@@ -56,7 +57,28 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
     @Override
     @SneakyThrows
     public void onUpdateReceived(Update update) {
+        if(update.hasCallbackQuery()){
+            System.out.println(update.getCallbackQuery().getData());
+            String callback = Arrays.stream(update.getCallbackQuery().getData().split(":")).findFirst().orElseThrow();
+           switch (callback) {
+               case "BACK":
+                   pageNumber--;
+                   buildMessage(message);
+                   return;
+               case "NEXT":
+                   pageNumber++;
+                   buildMessage(message);
+                   return;
+               case "ORIGINAL":
+                   System.out.println("Select source currency");
+                   return;
+               case "TARGET":
+                   System.out.println("Select target currency");
+                   return;
+           }
+        }
         if (update.hasMessage()) {
+            this.message = update.getMessage();
             handleMessage(update.getMessage());
         }
     }
@@ -70,33 +92,50 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
                 String command = message.getText().substring(commandEntity.get().getOffset(), commandEntity.get().getLength());
                 switch (command) {
                     case "/set_currency":
-                        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-                        List<String> currencies = currencyRateService
-                                .getCurrencyRateToRub(createUser(message.getChatId(), message.getFrom().getUserName(), message.getFrom().getLastName()))
-                                .stream().map(Currency::getCode).collect(Collectors.toList());
-                        for(String currency : currencies){
-                            buttons.add(
-                                    Arrays.asList(
-                                            InlineKeyboardButton.builder()
-                                                    .text(currency)
-                                                    .callbackData("ORIGINAL:" + currency)
-                                                    .build(),
-                                            InlineKeyboardButton.builder()
-                                                    .text(currency)
-                                                    .callbackData("TARGET:" + currency)
-                                                    .build()
-                                    )
-                            );
-                        }
-                        execute(SendMessage.builder()
-                                .text("Пожалуйста выберете валюты для конвертации")
-                                .chatId(message.getChatId().toString())
-                                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(buttons).build())
-                                .build());
+                    buildMessage(message);
                         return;
                 }
             }
         }
+    }
+
+    @SneakyThrows
+    private void buildMessage(Message message) {
+        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
+        List<String> currencies = currencyRateService
+                .getCurrencyRateToRub(createUser(message.getChatId(), message.getFrom().getUserName(), message.getFrom().getLastName()), pageNumber)
+                .stream().map(Currency::getCode).collect(Collectors.toList());
+        for(String currency : currencies){
+            buttons.add(
+                    Arrays.asList(
+                            InlineKeyboardButton.builder()
+                                    .text(currency)
+                                    .callbackData("ORIGINAL: " + currency)
+                                    .build(),
+                            InlineKeyboardButton.builder()
+                                    .text(currency)
+                                    .callbackData("TARGET: " + currency)
+                                    .build()
+                    )
+            );
+        }
+        buttons.add(
+                Arrays.asList(
+                        InlineKeyboardButton.builder()
+                                .text("Назад")
+                                .callbackData("BACK: " + pageNumber)
+                                .build(),
+                        InlineKeyboardButton.builder()
+                                .text("Вперед")
+                                .callbackData("NEXT: " + pageNumber)
+                                .build()
+                )
+        );
+        execute(SendMessage.builder()
+                .text("Пожалуйста выберете валюты для конвертации")
+                .chatId(message.getChatId().toString())
+                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(buttons).build())
+                .build());
     }
 
 //    private void botAnswerUtils(String receivedMessage, long chatId, String userName, String userLastname) {

@@ -1,6 +1,10 @@
 package ru.karaban.currency_rate_bot.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @EnableScheduling
+@EnableSpringDataWebSupport
 public class CurrencyRateService {
 
     private final CurrencyRateRepository currencyRateRepository;
@@ -32,6 +37,7 @@ public class CurrencyRateService {
     private final OptionsService optionsService;
 
 
+    Pageable secondPageWithFiveElements = PageRequest.of(1, 5);
     @Transactional
     @Scheduled(fixedDelay = 1000 * 3600 * 6)
     public void updateData() {
@@ -85,15 +91,15 @@ public class CurrencyRateService {
        return currencyRateRepository.findById(target.getCode() + "_" + source.getCode()).orElseThrow();
     }
 
-    public List<Currency> getCurrencyRateToRub(UserDto userDto) {
+    public Page<Currency> getCurrencyRateToRub(UserDto userDto, int pageNumber) {
         List<Options> optionsList = optionsService.findOptionByUser(userDto);
         if (optionsList.isEmpty()) {
-            return currencyRepository.findAll();
+            return currencyRepository.findAll(PageRequest.of(pageNumber, 5));
         }
         else {
             return currencyRepository.findAllByIsoCodeIn((optionsList.stream()
                     .map(options -> options.getCurrency().getIsoCode())
-                    .collect(Collectors.toList())));
+                    .collect(Collectors.toList())), secondPageWithFiveElements);
         }
     }
 
