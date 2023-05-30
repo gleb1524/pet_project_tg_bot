@@ -1,5 +1,6 @@
 package ru.karaban.currency_rate_bot.bot;
 
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -13,32 +14,30 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import ru.karaban.currency_rate_bot.bot.config.BotConfig;
-import ru.karaban.currency_rate_bot.dto.UserDto;
-import ru.karaban.currency_rate_bot.entity.Currency;
-import ru.karaban.currency_rate_bot.service.CurrencyRateService;
-import ru.karaban.currency_rate_bot.service.UserService;
+import ru.karaban.currency_rate_bot.bot.components.BotCommands;
+import ru.karaban.currency_rate_bot.bot.components.BotCurrency;
+import ru.karaban.currency_rate_bot.bot.components.BuildMessage;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import ru.karaban.currency_rate_bot.bot.components.PageNumber;
+import ru.karaban.currency_rate_bot.bot.config.BotConfig;
+import ru.karaban.currency_rate_bot.bot.stratage.HandleCallBack;
+import ru.karaban.currency_rate_bot.service.CurrencyRateService;
+
+import java.util.*;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@Data
 public class CurrencyRateBot extends TelegramLongPollingBot {
 
 
     private final BotConfig config;
-    private final UserService userService;
     private final CurrencyRateService currencyRateService;
-    private int pageNumber = 0;
-    private Message message;
-    private String sourceCurrency;
-    private String targetCurrency;
-
+    private final BuildMessage buildMessage;
+    private final List<HandleCallBack> handleCallBackMap;
+    private final PageNumber currentPageNumber;
+    private final BotCurrency botCurrency;
     @Override
     public String getBotUsername() {
         return config.getBotName();
@@ -57,7 +56,6 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
             handleCallbackQuery(update.getCallbackQuery());
         }
         if (update.hasMessage()) {
-            this.message = update.getMessage();
             handleMessage(update.getMessage());
         }
     }
@@ -66,25 +64,25 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
         String callback = Arrays.stream(callbackQuery.getData().split(":")).findFirst().orElseThrow();
         switch (callback) {
-            case "BACK":
-                pageNumber--;
-                if (pageNumber < 0) {
-                    pageNumber = 0;
-                }
-                buildMessage(message);
-                return;
-            case "NEXT":
-                pageNumber++;
-                buildMessage(message);
-                return;
             case "ORIGINAL":
-                sourceCurrency = callbackQuery.getData().substring(10);
-                log.info("Select source currency: " + sourceCurrency);
+                botCurrency.setSourceCurrency(callbackQuery.getMessage().getChatId(),callbackQuery.getData().substring(10));
+                log.info("Select source currency: " + botCurrency.getSourceCurrency(callbackQuery.getMessage().getChatId()));
                 return;
             case "TARGET":
-                targetCurrency = callbackQuery.getData().substring(8);
-                log.info("Select target currency: " + targetCurrency);
+                botCurrency.setTargetCurrency(callbackQuery.getMessage().getChatId(),callbackQuery.getData().substring(8));
+                log.info("Select source target: " + botCurrency.getSourceCurrency(callbackQuery.getMessage().getChatId()));
+                return;
         }
+        Map<String, HandleCallBack> stratagesMap = new HashMap<>();
+        for (HandleCallBack handleCallBack : handleCallBackMap) {
+            stratagesMap.putAll(handleCallBack.getStratage(callback));
+        }
+        List<List<InlineKeyboardButton>> lists = stratagesMap.get(callback).handleCallBack(callbackQuery);
+        execute(SendMessage.builder()
+                .text("Пожалуйста выберете валюты для конвертации")
+                .chatId(callbackQuery.getMessage().getChatId().toString())
+                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(lists).build())
+                .build());
     }
 
     @SneakyThrows
@@ -96,8 +94,18 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
                 String command = message.getText().substring(commandEntity.get().getOffset(), commandEntity.get().getLength());
                 switch (command) {
                     case "/set_currency":
-                        buildMessage(message);
+                        execute(SendMessage.builder()
+                                .text("Пожалуйста выберете валюты для конвертации")
+                                .chatId(message.getChatId().toString())
+                                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(buildMessage.buildMessage(message.getChatId(), message.getFrom().getFirstName(), message.getFrom().getLastName(), 0)).build())
+                                .build());
+                        currentPageNumber.setCurrentPage(message.getChatId(), 0);
                         return;
+                    case "/help":
+                        execute(SendMessage.builder()
+                                .chatId(message.getChatId().toString())
+                                .text(BotCommands.HELP_TEXT)
+                                .build());
                 }
             }
         }
@@ -106,10 +114,12 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
             Optional<Long> value = parseLong(messageText);
             if (value.isPresent()) {
                 double rate = 0;
+                String sourceCurrency = botCurrency.getSourceCurrency(message.getChatId());
+                String targetCurrency = botCurrency.getTargetCurrency(message.getChatId());
                 if (targetCurrency.equals("RUB")) {
-                    rate = currencyRateService.getRateToRub(sourceCurrency).doubleValue()*value.get();
+                    rate = currencyRateService.getRateToRub(sourceCurrency).doubleValue() * value.get();
                 } else if (sourceCurrency.equals("RUB")) {
-                    rate = value.get()/currencyRateService.getRateToRub(targetCurrency).doubleValue();
+                    rate = value.get() / currencyRateService.getRateToRub(targetCurrency).doubleValue();
                 } else {
                     rate = currencyRateService.getDifferentCurrencyRate(sourceCurrency, targetCurrency).doubleValue() * value.get();
                 }
@@ -127,116 +137,5 @@ public class CurrencyRateBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             return Optional.empty();
         }
-    }
-
-
-    @SneakyThrows
-    private void buildMessage(Message message) {
-        List<List<InlineKeyboardButton>> buttons = new ArrayList<>();
-        List<String> currencies = currencyRateService
-                .getAllCurrencyRateToRub(createUser(message.getChatId(), message.getFrom().getUserName(), message.getFrom().getLastName()), pageNumber)
-                .stream().map(Currency::getCode).collect(Collectors.toList());
-        for (String currency : currencies) {
-            buttons.add(
-                    Arrays.asList(
-                            InlineKeyboardButton.builder()
-                                    .text(currency)
-                                    .callbackData("ORIGINAL: " + currency)
-                                    .build(),
-                            InlineKeyboardButton.builder()
-                                    .text(currency)
-                                    .callbackData("TARGET: " + currency)
-                                    .build()
-                    )
-            );
-        }
-        buttons.add(
-                Arrays.asList(
-                        InlineKeyboardButton.builder()
-                                .text("RUB")
-                                .callbackData("ORIGINAL: RUB")
-                                .build(),
-                        InlineKeyboardButton.builder()
-                                .text("RUB")
-                                .callbackData("TARGET: RUB")
-                                .build()
-                )
-        );
-        buttons.add(
-                Arrays.asList(
-                        InlineKeyboardButton.builder()
-                                .text("Назад")
-                                .callbackData("BACK: " + pageNumber)
-                                .build(),
-                        InlineKeyboardButton.builder()
-                                .text("Вперед")
-                                .callbackData("NEXT: " + pageNumber)
-                                .build()
-                )
-        );
-        execute(SendMessage.builder()
-                .text("Пожалуйста выберете валюты для конвертации")
-                .chatId(message.getChatId().toString())
-                .replyMarkup(InlineKeyboardMarkup.builder().keyboard(buttons).build())
-                .build());
-    }
-
-//    private void botAnswerUtils(String receivedMessage, long chatId, String userName, String userLastname) {
-//        switch (receivedMessage) {
-//            case "/start":
-//                startBot(chatId, userName, userLastname);
-//                break;
-//            case "/help":
-//                sendHelpText(chatId, HELP_TEXT);
-//                break;
-//            default:
-//                break;
-//        }
-//    }
-
-    private UserDto createUser(Long chatId, String userName, String userSurname) {
-        UserDto userDto = UserDto.builder()
-                .id(chatId)
-                .name(userName)
-                .surname(userSurname)
-                .build();
-        try {
-            userService.createUser(userDto);
-        } catch (Exception e) {
-            log.error(e.getMessage());
-        }
-        return userDto;
-    }
-
-    private void sendHelpText(Long chatId, String textToSend) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(textToSend);
-
-        try {
-            execute(message);
-            log.info("Reply sent");
-        } catch (TelegramApiException e) {
-            log.error(e.getMessage());
-        }
-    }
-
-    public static SendMessage sendInlineKeyBoardMessage(long chatId) {
-        InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
-        InlineKeyboardButton inlineKeyboardButtonHelp = new InlineKeyboardButton();
-        InlineKeyboardButton inlineKeyboardButtonStart = new InlineKeyboardButton();
-        inlineKeyboardButtonHelp.setText("Help");
-        inlineKeyboardButtonStart.setText("Start");
-        List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
-        keyboardButtonsRow1.add(inlineKeyboardButtonHelp);
-        keyboardButtonsRow1.add(inlineKeyboardButtonStart);
-        List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
-        rowList.add(keyboardButtonsRow1);
-        inlineKeyboardMarkup.setKeyboard(rowList);
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText("Test");
-        message.setReplyMarkup(inlineKeyboardMarkup);
-        return message;
     }
 }

@@ -1,17 +1,10 @@
 package ru.karaban.currency_rate_bot.bot.components;
-
-import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
-
-import java.util.List;
-
 public interface BotCommands {
-    List<BotCommand> LIST_OF_COMMANDS = List.of(
-            new BotCommand("/start", "start bot"),
-            new BotCommand("/help", "bot info")
-    );
 
-    String HELP_TEXT = "This bot will help to count the number of messages in the chat. " +
-            "The following commands are available to you:\n\n" +
-            "/start - start the bot\n" +
+    String HELP_TEXT = "Этот бот умеет конвертировать валюты по курсу ЦБ РФ. " +
+            "Курс обновляется автоматически каждые 6 часов. Чтобы задать валюты воспользуйтесь командой:\n" +
+            "/set_currency. Далее в появившемся списке выберите валюты для конвертации и введите\n" +
+            "сколько единиц выбранной валюты вы хотите ковертировать.\n" +
+            "Используйте кнопки 'Вперёд' и 'Назад' для просмотра всех доступных валют.\n" +
             "/help - help menu";
 }
